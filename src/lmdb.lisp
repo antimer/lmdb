@@ -685,7 +685,7 @@ open the same database.)
 
 @end(deflist)")
   
-  (:method ((database database) &key (transaction *transaction*) (create nil) (if-does-not-exist :error))
+  (:method ((database database) &key (transaction *transaction*) (if-does-not-exist :error))
     (with-slots (name) database
       (require-open-transaction transaction "open-database")
       (when (open-p database)
@@ -695,10 +695,9 @@ open the same database.)
         (let* ((%handle (cffi:foreign-alloc :uint))
                (return-code (liblmdb:dbi-open (handle transaction)
                                               name
-                                              (logior 0
-                                                      (if create
-                                                          liblmdb:+create+
-                                                          0))
+                                              (case if-does-not-exist
+                                                (:create liblmdb:+create+)
+                                                (t 0))
                                               %handle)))
           (alexandria:switch (return-code)
             (0
