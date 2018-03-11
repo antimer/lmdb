@@ -26,6 +26,7 @@
    :database-maximum-count
    :database-not-found
    :del
+   :delete-environment
    :do-pairs
    :drop-database
    :ensure-open-database
@@ -479,6 +480,10 @@ in a segmentation fault.)
     ;; available to the finalize-environment operator
     (slot-makunbound environment 'handle))
   t)
+
+(defun delete-enviromnent (environment)
+  (let ((directory (environment-directory environment)))
+    (uiop:delete-directory-tree directory :validate 'probe-file)))
 
 (defun environment-statistics (environment)
   "Return statistics about the environment."
