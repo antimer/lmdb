@@ -387,7 +387,7 @@ floats, booleans and strings. Returns a (size . array) pair."
           (0 (cffi:mem-ref %count :uint32))
           (t (unknown-error return-code)))))))
 
-(defgeneric open-environment (environment &key create)
+(defgeneric open-environment (environment &key if-does-not-exist)
   (:documentation "Open the environment connection.
 
 @begin(deflist)
@@ -400,13 +400,15 @@ floats, booleans and strings. Returns a (size . array) pair."
     (declare (dynamic-extent args) (ignore args))
     (unless (open-p environment)
       (call-next-method)))
-  (:method ((environment environment) &key (create nil))
+  (:method ((environment environment) &key (create nil)
+            (if-does-not-exist (if create :create :error)))
     (with-slots (directory) environment
       (assert (uiop:directory-pathname-p directory))
-      (if create
-          (ensure-directories-exist directory)
-          (assert (probe-file directory) ()
-                  "invalid environment location: ~s" directory))
+      (unless (probe-file directory)
+        (ecase if-does-not-exist
+          (:error (error "invalid environment location: ~s" directory))
+          (:create (ensure-directories-exist directory))
+          ((nil) (return-from open-environment nil))))
       (let* ((%handle (cffi:foreign-alloc :pointer)))
         (case (liblmdb:env-create %handle)
           (0 (let ((%environment (cffi:mem-ref %handle :pointer)))
