@@ -1,4 +1,4 @@
-(defsystem lmdb
+(asdf:defsystem lmdb
   :author "Fernando Borretti <eudoxiahp@gmail.com>"
   :maintainer "Fernando Borretti <eudoxiahp@gmail.com>"
   :license "MIT"

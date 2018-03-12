@@ -469,31 +469,43 @@ open the same database.)
           (t
            (unknown-error return-code)))))))
 
-(defun cursor-get (cursor operation)
+(defun cursor-get (cursor operation &optional key)
   "Extract data using a cursor.
 
 The @cl:param(operation) argument specifies the operation."
   (let ((op (case operation
               (:first :+first+)
-              (:current :+current+)
+              (:current :+get-current+)
               (:last :+last+)
               (:next :+next+)
-              (:prev :+prev+))))
-    (with-empty-value (raw-key)
-      (with-empty-value (raw-value)
-        (let ((return-code (liblmdb:cursor-get (handle cursor)
-                                                raw-key
-                                                raw-value
-                                                op)))
-          (alexandria:switch (return-code)
-            (0
-             ;; Success
-             (values (raw-value-to-vector raw-key)
-                     (raw-value-to-vector raw-value)))
-            (liblmdb:+notfound+
-             (values nil nil))
-            (t
-             (unknown-error return-code))))))))
+              (:prev :+prev+)
+              ;; These three require a KEY argument
+              (:set :+set+)
+              (:set-key :+set-key+)
+              (:set-range :+set-range+)
+              )))
+    (flet ((body (raw-key raw-value)
+             (let ((return-code (liblmdb:cursor-get (handle cursor)
+                                                    raw-key
+                                                    raw-value
+                                                    op)))
+               (alexandria:switch (return-code)
+                 (0
+                  ;; Success
+                  (values (raw-value-to-vector raw-key)
+                          (raw-value-to-vector raw-value)))
+                 (liblmdb:+notfound+
+                  (values nil nil))
+                 (t
+                  (unknown-error return-code))))))
+      (declare (dynamic-extent #'body))
+      (if key
+          (with-val (raw-key key)
+            (with-val (raw-value #(0))
+              (body raw-key raw-value)))
+          (with-empty-value (raw-key)
+            (with-empty-value (raw-value)
+              (body raw-key raw-value)))))))
 
 ;;; Destructors
 
@@ -539,9 +551,8 @@ gone).))
 (defun close-cursor (cursor)
   "Close a cursor."
   (with-slots (database) cursor
-    (with-slots (transaction) database
-      (liblmdb:cursor-close (%handle cursor))
-      (cffi:foreign-free (%handle cursor))))
+    (liblmdb:cursor-close (handle cursor))
+    (cffi:foreign-free (%handle cursor)))
   t)
 
 ;;; Macros
