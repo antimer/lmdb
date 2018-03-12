@@ -87,16 +87,17 @@
            (is-true
             (lmdb:commit-transaction ,txn)))))))
 
+(defun put-three (db)
+  (lmdb:put db #(1) #(2))
+  (lmdb:put db #(2) #(3))
+  (lmdb:put db #(3) #(4)))
+
 (test queries
   (let ((env (lmdb:make-environment +env-directory+)))
     (lmdb:with-environment (env)
       (with-query (env db "db")
         (finishes
-          (lmdb:put db #(1) #(2)))
-        (finishes
-          (lmdb:put db #(2) #(3)))
-        (finishes
-          (lmdb:put db #(3) #(4)))
+          (put-three db))
         (is
          (equalp (lmdb:get db #(1))
                  #(2)))
@@ -133,6 +134,7 @@
          (lmdb:begin-transaction txn))
         (let ((db (lmdb:make-database txn "db")))
           (lmdb:with-database (db)
+            (finishes (put-three db))
             (let ((cur (lmdb:make-cursor db)))
               (lmdb:with-cursor (cur)
                 (multiple-value-bind (key value)
@@ -146,7 +148,13 @@
                   (is
                    (typep key 'vector))
                   (is
-                   (typep value 'vector))))
+                   (typep value 'vector)))
+                (multiple-value-bind (key value)
+                    (lmdb:cursor-get cur :set-range #(0))
+                  (is
+                   (equalp key #(1)))
+                  (is
+                   (equalp value #(2)))))
               (lmdb:commit-transaction txn))))))))
 
 (test iteration
@@ -157,6 +165,7 @@
          (lmdb:begin-transaction txn))
         (let ((db (lmdb:make-database txn "db")))
           (lmdb:with-database (db)
+            (finishes (put-three db))
             (let ((count 0))
               (lmdb:do-pairs (db key value)
                 (is
@@ -165,12 +174,13 @@
                  (typep value 'vector))
                 (incf count))
               (is
-               (= count 3)))))
-        (is-true
-         (lmdb:commit-transaction txn))))))
+               (= count 3)))
+            (is-true
+             (lmdb:commit-transaction txn))))))))
 
 (defun run-tests ()
   (unwind-protect
        (dotimes (i 20)
          (run! 'tests))
-    (uiop:delete-directory-tree +env-directory+ :validate t)))
+    (uiop:delete-directory-tree
+     +env-directory+ :validate t :if-does-not-exist :ignore)))

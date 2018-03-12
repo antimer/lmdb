@@ -1,4 +1,4 @@
-(defsystem lmdb-test
+(asdf:defsystem lmdb-test
   :author "Fernando Borretti <eudoxiahp@gmail.com>"
   :license "MIT"
   :depends-on (:lmdb
