@@ -481,7 +481,7 @@ in a segmentation fault.)
     (slot-makunbound environment 'handle))
   t)
 
-(defun delete-enviromnent (environment)
+(defun delete-environment (environment)
   (let ((directory (environment-directory environment)))
     (uiop:delete-directory-tree directory :validate 'probe-file)))
 
