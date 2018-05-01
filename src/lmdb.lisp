@@ -52,6 +52,7 @@
    :transaction
    :transaction-environment
    :transaction-parent
+   :unknown-error
    :version-string
    :with-cursor
    :with-database
@@ -752,7 +753,7 @@ gone).))
 (defgeneric drop-database  (database &key delete transaction)
   (:method ((database database) &key (delete 0) (transaction *transaction*))
     (require-open-transaction transaction "drop-database")
-    (liblmdb:drop (handle transaction) (handle graph-db) delete)))
+    (liblmdb:drop (handle transaction) (handle database) delete)))
 
 ;;; cursor operations
 
