@@ -25,6 +25,7 @@
    :database
    :database-maximum-count
    :database-not-found
+   :database-statistics
    :del
    :delete-environment
    :do-pairs
@@ -754,6 +755,25 @@ gone).))
   (:method ((database database) &key (delete 0) (transaction *transaction*))
     (require-open-transaction transaction "drop-database")
     (liblmdb:drop (handle transaction) (handle database) delete)))
+
+(defun database-statistics (database &key (transaction *transaction*))
+  "Return statistics about the database."
+  (cffi:with-foreign-object (%stat '(:struct liblmdb:stat))
+    (require-open-transaction transaction "database-statistics")
+    (liblmdb:stat (handle transaction)
+                      (handle database)
+                      %stat)
+    (macrolet ((slot (slot)
+                 `(cffi:foreign-slot-value %stat
+                                           '(:struct liblmdb:stat)
+                                           ',slot)))
+      (list :page-size (slot liblmdb:ms-psize)
+            :depth (slot liblmdb:ms-depth)
+            :branch-pages (slot liblmdb:ms-branch-pages)
+            :leaf-pages (slot liblmdb:ms-leaf-pages)
+            :overflow-pages (slot liblmdb:ms-overflow-pages)
+            :entries (slot liblmdb:ms-entries)
+            ))))
 
 ;;; cursor operations
 
