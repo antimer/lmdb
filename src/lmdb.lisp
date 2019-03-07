@@ -35,6 +35,7 @@
    :environment
    :environment-directory
    :environment-info
+   :environment-info-last-transaction-id
    :environment-statistics
    :get
    :lmdb-error
@@ -519,6 +520,16 @@ in a segmentation fault.)
             :last-transaction-id (slot liblmdb:me-last-txnid)
             :maximum-readers (slot liblmdb:me-maxreaders)
             :number-of-readers (slot liblmdb:me-numreaders)))))
+
+(defun environment-info-last-transaction-id (environment)
+  "Return information about the environment."
+  (cffi:with-foreign-object (info '(:struct liblmdb:envinfo))
+    (liblmdb:env-info (handle environment) info)
+    (macrolet ((slot (slot)
+                 `(cffi:foreign-slot-value info
+                                           '(:struct liblmdb:envinfo)
+                                           ',slot)))
+      (slot liblmdb:me-last-txnid))))
 
 
 ;;; transaction management
