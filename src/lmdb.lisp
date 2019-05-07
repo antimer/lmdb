@@ -38,6 +38,7 @@
    :environment-info-last-transaction-id
    :environment-statistics
    :get
+   :get-with
    :lmdb-error
    :make-cursor
    :make-database
