@@ -55,6 +55,7 @@
    :transaction
    :transaction-environment
    :transaction-parent
+   :transaction-id
    :unknown-error
    :version-string
    :with-cursor
@@ -158,7 +159,10 @@
     :type integer
     :documentation "Flags to supply to txn_begin.
     These are supplied at initialization as, once the transaction exists,
-    they cannot be changed."))   
+    they cannot be changed.")
+   (id
+    :accessor transaction-id
+    :documentation "Set to the active transaction id when begun"))   
   (:documentation "A transaction."))
 
 (defclass database (handle)
@@ -381,7 +385,9 @@ floats, booleans and strings. Returns a (size . array) pair."
   (let ((*print-pretty* nil))
     (print-unreadable-object (object stream :identity t :type t)
       (format stream "~s" (if (slot-boundp object 'directory)
-                              (first (last (pathname-directory (slot-value object 'directory))))
+                              (if (slot-value object 'directory)
+                                  (first (last (pathname-directory (slot-value object 'directory))))
+                                  "?")
                               "?")))))
 
 (defgeneric check-for-stale-readers (environment)
@@ -408,7 +414,8 @@ floats, booleans and strings. Returns a (size . array) pair."
   (:method ((environment environment) &key (create nil)
             (if-does-not-exist (if create :create :error)))
     (with-slots (directory) environment
-      (assert (uiop:directory-pathname-p directory))
+      (assert (and (pathnamep directory) (uiop:directory-pathname-p directory)) ()
+              "open-environment: invalid location: ~s" directory)
       (unless (probe-file directory)
         (ecase if-does-not-exist
           (:error (error "invalid environment location: ~s" directory))
@@ -570,6 +577,9 @@ in a segmentation fault.)
                                                 %handle)))
             (alexandria:switch (return-code)
               (0
+               (let ((%txn (cffi:mem-ref %handle :pointer)))
+                 (setf (transaction-id transaction)
+                       (cffi:foreign-slot-value %txn '(:struct liblmdb:txn) 'liblmdb:mt-txnid)))
                ;; Success
                t)
               ;; TODO rest
