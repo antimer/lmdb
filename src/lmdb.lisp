@@ -380,6 +380,14 @@ floats, booleans and strings. Returns a (size . array) pair."
 
 
 ;;; environment management
+#+sbcl
+(defmacro without-interrupts (&body)
+  `(sb-sys:without-interrupts ,@body))
+
+#-sbcl
+(defmacro without-interrupts (&body)
+  (cerror "continue to compile" "no definition present for without-interrupts")
+  `(progn ,@body))
 
 (defmethod print-object ((object environment) stream)
   (let ((*print-pretty* nil))
@@ -392,11 +400,12 @@ floats, booleans and strings. Returns a (size . array) pair."
 
 (defgeneric check-for-stale-readers (environment)
   (:method ((env environment))
-    (cffi:with-foreign-object (%count :uint32)
-      (let ((return-code (liblmdb:reader-check (handle env) %count)))
-        (case return-code
-          (0 (cffi:mem-ref %count :uint32))
-          (t (unknown-error return-code)))))))
+    (without-interrupts
+      (cffi:with-foreign-object (%count :uint32)
+        (let ((return-code (liblmdb:reader-check (handle env) %count)))
+          (case return-code
+            (0 (cffi:mem-ref %count :uint32))
+            (t (unknown-error return-code))))))))
 
 (defgeneric open-environment (environment &key if-does-not-exist)
   (:documentation "Open the environment connection.
@@ -569,12 +578,14 @@ in a segmentation fault.)
     (with-slots (env parent) transaction
       (let ((%handle (%handle transaction)))
         (when (cffi:null-pointer-p (cffi:mem-ref %handle :pointer))
-          (let ((return-code (liblmdb:txn-begin (handle env)
-                                                (if parent
-                                                    (handle parent)
-                                                    (cffi:null-pointer))
-                                                flags
-                                                %handle)))
+          (let ((return-code
+                 (without-interrupts
+                   (liblmdb:txn-begin (handle env)
+                                      (if parent
+                                          (handle parent)
+                                          (cffi:null-pointer))
+                                      flags
+                                      %handle))))
             (alexandria:switch (return-code)
               (0
                (let ((%txn (cffi:mem-ref %handle :pointer)))
@@ -589,7 +600,7 @@ in a segmentation fault.)
 
 (defun require-open-transaction (transaction &optional (message nil))
   (assert (open-p transaction) ()
-          "~@~[~a: ~]transaction not open: ~s." message transaction))
+          "~@[~a: ~]transaction not open: ~s." message transaction))
 
 
 (defgeneric commit-transaction (transaction)
@@ -650,7 +661,9 @@ called by the transaction-creating thread.)
 @end(deflist)")
   (:method ((transaction transaction))
     (with-slots (env parent) transaction
-      (let ((return-code (liblmdb:txn-renew (handle transaction))))
+      (let ((return-code
+             (without-interrupts
+               (liblmdb:txn-renew (handle transaction)))))
         (alexandria:switch (return-code)
           (0
            ;; Success
