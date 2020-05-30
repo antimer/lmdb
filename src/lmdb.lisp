@@ -381,7 +381,7 @@ floats, booleans and strings. Returns a (size . array) pair."
 
 ;;; environment management
 #+sbcl
-(defmacro without-interrupts (&body)
+(defmacro without-interrupts (&body body)
   `(sb-sys:without-interrupts ,@body))
 
 #-sbcl
