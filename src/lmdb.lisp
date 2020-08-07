@@ -223,13 +223,16 @@ Before an environment can be used, it must be opened with @c(open-environment)."
 (defgeneric make-transaction (environment &key class parent &allow-other-keys)
   (:method ((environment environment) &rest args
             &key (class *transaction-class*)
-            parent
+            (parent *transaction*)
             &allow-other-keys)
     "Create a transaction object."
+    (when (and *transaction* *warn-if-parent-transactions*)
+      (warn "make-transaction: implicit parent: ~s/~s" parent environment))
     (declare (dynamic-extent args)
              (ignore parent))
     (apply #'make-instance class
            :environment environment
+           :parent parent
            args)))
 
 (defmethod initialize-instance ((instance transaction) &rest args &key class)
@@ -1072,6 +1075,11 @@ The @cl:param(operation) argument specifies the operation."
  and involved in operations in another."
   (declare (dynamic-extent op))
   (cond ((find transaction *transactions*)
+         ;; this is actually not legal
+         ;; as per http://www.lmdb.tech/doc/group__mdb.html#gad7ea55da06b77513609efebd44b26920
+         ;; "A parent transaction and its cursors may not issue any other operations than mdb_txn_commit and mdb_txn_abort while it has active child transactions"
+         (warn "lmdb:call-with-transaction: intention to operate op parent transaction ~s/~s"
+               *transaction* transaction)
          (funcall op transaction))
         (t
          (let ((status nil)
