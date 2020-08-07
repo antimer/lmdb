@@ -226,10 +226,9 @@ Before an environment can be used, it must be opened with @c(open-environment)."
             (parent *transaction*)
             &allow-other-keys)
     "Create a transaction object."
+    (declare (dynamic-extent args))
     (when (and *transaction* *warn-if-parent-transactions*)
       (warn "make-transaction: implicit parent: ~s/~s" parent environment))
-    (declare (dynamic-extent args)
-             (ignore parent))
     (apply #'make-instance class
            :environment environment
            :parent parent
