@@ -585,7 +585,7 @@ in a segmentation fault.)
                  (without-interrupts
                    (liblmdb:txn-begin (handle env)
                                       (if parent
-                                          (handle parent)
+                                          (%handle parent)
                                           (cffi:null-pointer))
                                       flags
                                       %handle))))
@@ -1080,6 +1080,11 @@ The @cl:param(operation) argument specifies the operation."
          ;; "A parent transaction and its cursors may not issue any other operations than mdb_txn_commit and mdb_txn_abort while it has active child transactions"
          (warn "lmdb:call-with-transaction: intention to operate op parent transaction ~s/~s"
                *transaction* transaction)
+         (funcall op transaction))
+        ((and *transaction*
+              (eq (transaction-environment *transaction*)
+                  (transaction-environment transaction)))
+         ;; do not nest, just use
          (funcall op transaction))
         (t
          (let ((status nil)
