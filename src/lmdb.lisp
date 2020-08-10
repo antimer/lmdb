@@ -469,17 +469,21 @@ floats, booleans and strings. Returns a (size . array) pair."
     (check-for-stale-readers environment)
     environment))
 
+(defparameter *lmdb-verbose* t)
+
 (defun finalize-environment (%handle)
   "When an environment instance is no longer reachable, examine its
  lmdb environment handle. Iff that is not null, the environment was never closed - close it.
- Finally, always free the handle"
+ Finally, free the handle"
   (let ((%env (cffi:mem-ref %handle :pointer)))
     (unless (cffi:null-pointer-p %env)
+      (when *lmdb-verbose*
+        (format *trace-output* "~&finalize ~8,'0x[~8,'0x]" %handle %env))
       ;; to be sure
       (setf (cffi:mem-ref %handle :pointer) (cffi:null-pointer))
       ;; then close it
-      (liblmdb:env-close %env))
-    (cffi:foreign-free %handle)))
+      (liblmdb:env-close %env)
+      (cffi:foreign-free %handle))))
 
 (defun close-environment (environment)
   "Close the environment connection and free the memory.
@@ -497,6 +501,8 @@ in a segmentation fault.)
     ;; similar to finalize, but do not free the handle.
     (let ((%env (handle environment)))
       (unless (cffi:null-pointer-p %env)
+        (when *lmdb-verbose*
+          (format *trace-output* "~&close environment ~a [~8,'0x]" environment %env))
         (liblmdb:env-close %env)
         (setf (cffi:mem-ref (%handle environment) :pointer) (cffi:null-pointer))))
     ;;!! this eliminates the reference, but leaves the handle allocated to be
@@ -574,7 +580,9 @@ in a segmentation fault.)
 @term(Thread Safety)
 
 @def(A transaction may only be used by a single thread, unless thread-local storage
- when the transaction is created.)
+ when the transaction is created.
+ Moreover, a given thread should use ony transaction only and
+ nesting is permitted for parent write transactions only.)
 
 @end(deflist)")
   (:method ((transaction transaction) &key (flags (transaction-flags transaction)))
