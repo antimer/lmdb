@@ -48,6 +48,7 @@
    :open-database
    :open-environment
    :open-p
+   :print-object-slots
    :put
    :reentrant-cursor-error
    :renew-transaction
@@ -392,14 +393,23 @@ floats, booleans and strings. Returns a (size . array) pair."
   (cerror "continue to compile" "no definition present for without-interrupts")
   `(progn ,@body))
 
+(defmethod lmdb:print-object-slots ((object environment) stream)
+  (format stream "~s"
+          (if (slot-boundp object 'directory)
+              (if (slot-value object 'directory)
+                  (first (last (pathname-directory (slot-value object 'directory))))
+                  "?")
+              "?"))
+  (when (slot-boundp object 'handle)
+    (let ((%handle (%handle object)))
+      (format stream " ~8,'0x" %handle)
+      (unless (cffi:null-pointer-p %handle)
+        (format stream "[~8,'0x]" (handle object))))))
+
 (defmethod print-object ((object environment) stream)
   (let ((*print-pretty* nil))
     (print-unreadable-object (object stream :identity t :type t)
-      (format stream "~s" (if (slot-boundp object 'directory)
-                              (if (slot-value object 'directory)
-                                  (first (last (pathname-directory (slot-value object 'directory))))
-                                  "?")
-                              "?")))))
+      (lmdb:print-object-slots object stream))))
 
 (defgeneric check-for-stale-readers (environment)
   (:method ((env environment))
@@ -409,6 +419,8 @@ floats, booleans and strings. Returns a (size . array) pair."
           (case return-code
             (0 (cffi:mem-ref %count :uint32))
             (t (unknown-error return-code))))))))
+
+(defparameter *lmdb-verbose* t)
 
 (defgeneric open-environment (environment &key if-does-not-exist)
   (:documentation "Open the environment connection.
@@ -462,7 +474,7 @@ floats, booleans and strings. Returns a (size . array) pair."
                                      (sb-ext:finalize environment
                                                       #'(lambda () (finalize-environment %handle)))
                                      (when *lmdb-verbose*
-                                       (format *trace-output* "~&open environment ~a ~8,'0x[~8,'0x]" environment %handle %environment))
+                                       (format *trace-output* "~&open environment ~a" environment))
                                      t)
                                     (t
                                      (unknown-error return-code))))))
@@ -471,8 +483,6 @@ floats, booleans and strings. Returns a (size . array) pair."
     (check-for-stale-readers environment)
     environment))
 
-(defparameter *lmdb-verbose* t)
-
 (defun finalize-environment (%handle)
   "When an environment instance is no longer reachable, examine its
  lmdb environment handle. Iff that is not null, the environment was never closed - close it.
@@ -480,7 +490,7 @@ floats, booleans and strings. Returns a (size . array) pair."
   (let ((%env (cffi:mem-ref %handle :pointer)))
     (unless (cffi:null-pointer-p %env)
       (when *lmdb-verbose*
-        (format *trace-output* "~&finalize ~8,'0x[~8,'0x]" %handle %env))
+        (format *trace-output* "~&finalize environment ~8,'0x[~8,'0x]" %handle %env))
       ;; to be sure
       (setf (cffi:mem-ref %handle :pointer) (cffi:null-pointer))
       ;; then close it
@@ -504,7 +514,7 @@ in a segmentation fault.)
     (let ((%env (handle environment)))
       (unless (cffi:null-pointer-p %env)
         (when *lmdb-verbose*
-          (format *trace-output* "~&close environment ~a [~8,'0x]" environment %env))
+          (format *trace-output* "~&close environment ~a" environment))
         (liblmdb:env-close %env)
         (setf (cffi:mem-ref (%handle environment) :pointer) (cffi:null-pointer))))
     ;;!! this eliminates the reference, but leaves the handle allocated to be
