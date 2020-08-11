@@ -461,6 +461,8 @@ floats, booleans and strings. Returns a (size . array) pair."
                                      #+sbcl
                                      (sb-ext:finalize environment
                                                       #'(lambda () (finalize-environment %handle)))
+                                     (when *lmdb-verbose*
+                                       (format *trace-output* "~&open environment ~a [~8,'0x]" environment %environment))
                                      t)
                                     (t
                                      (unknown-error return-code))))))
