@@ -462,7 +462,7 @@ floats, booleans and strings. Returns a (size . array) pair."
                                      (sb-ext:finalize environment
                                                       #'(lambda () (finalize-environment %handle)))
                                      (when *lmdb-verbose*
-                                       (format *trace-output* "~&open environment ~a [~8,'0x]" environment %environment))
+                                       (format *trace-output* "~&open environment ~a ~8,'0x[~8,'0x]" environment %handle %environment))
                                      t)
                                     (t
                                      (unknown-error return-code))))))
