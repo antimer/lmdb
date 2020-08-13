@@ -225,7 +225,10 @@ Before an environment can be used, it must be opened with @c(open-environment)."
 (defgeneric make-transaction (environment &key class parent &allow-other-keys)
   (:method ((environment environment) &rest args
             &key (class *transaction-class*)
-            (parent *transaction*)
+            ;; do not default to the current transaction. this is allowed
+            ;; for write parents only.
+            ;; (parent *transaction*)
+            (parent nil)
             &allow-other-keys)
     "Create a transaction object."
     (declare (dynamic-extent args))
@@ -474,7 +477,7 @@ floats, booleans and strings. Returns a (size . array) pair."
                                      (sb-ext:finalize environment
                                                       #'(lambda () (finalize-environment %handle)))
                                      (when *lmdb-verbose*
-                                       (format *trace-output* "~&open environment ~a" environment))
+                                       (format *trace-output* "~&open environment ~a~%" environment))
                                      t)
                                     (t
                                      (unknown-error return-code))))))
@@ -490,7 +493,7 @@ floats, booleans and strings. Returns a (size . array) pair."
   (let ((%env (cffi:mem-ref %handle :pointer)))
     (unless (cffi:null-pointer-p %env)
       (when *lmdb-verbose*
-        (format *trace-output* "~&finalize environment ~8,'0x[~8,'0x]" %handle %env))
+        (format *trace-output* "~&finalize environment ~8,'0x[~8,'0x]~%" %handle %env))
       ;; to be sure
       (setf (cffi:mem-ref %handle :pointer) (cffi:null-pointer))
       ;; then close it
@@ -514,7 +517,7 @@ in a segmentation fault.)
     (let ((%env (handle environment)))
       (unless (cffi:null-pointer-p %env)
         (when *lmdb-verbose*
-          (format *trace-output* "~&close environment ~a" environment))
+          (format *trace-output* "~&close environment ~a~%" environment))
         (liblmdb:env-close %env)
         (setf (cffi:mem-ref (%handle environment) :pointer) (cffi:null-pointer))))
     ;;!! this eliminates the reference, but leaves the handle allocated to be
