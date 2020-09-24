@@ -233,7 +233,7 @@ Before an environment can be used, it must be opened with @c(open-environment)."
     "Create a transaction object."
     (declare (dynamic-extent args))
     (when (and *transaction* *warn-if-parent-transactions*)
-      (warn "make-transaction: implicit parent: ~s/~s" parent environment))
+      (warn "make-transaction: ~s/~s implicit parent: ~s" parent environment *transaction*))
     (apply #'make-instance class
            :environment environment
            :parent parent
@@ -574,6 +574,17 @@ in a segmentation fault.)
 
 
 ;;; transaction management
+
+(defmethod print-object ((object transaction) stream)
+  (let ((*print-pretty* nil))
+    (print-unreadable-object (object stream :identity t :type t)
+      (format stream "~s@~s"
+              (if (slot-boundp object 'env)
+                  (slot-value object 'env)
+                  "?")
+              (if (slot-boundp object 'id)
+                  (slot-value object 'id)
+                              "-")))))
 
 (defun finalize-transaction (%handle)
   "When a transaction instance is no longer reachable, examine its
@@ -1098,10 +1109,12 @@ The @cl:param(operation) argument specifies the operation."
  and involved in operations in another."
   (declare (dynamic-extent op))
   (cond ((find transaction *transactions*)
-         ;; this is actually not legal
+         ;; this indicate a probable program error: a transaction wrapper should not nest in itself.
+         ;; especially with nested write transactions, this is actually not legal:
+         ;; it implies operations on entities governed by the transaction, but
          ;; as per http://www.lmdb.tech/doc/group__mdb.html#gad7ea55da06b77513609efebd44b26920
          ;; "A parent transaction and its cursors may not issue any other operations than mdb_txn_commit and mdb_txn_abort while it has active child transactions"
-         (warn "lmdb:call-with-transaction: intention to operate op parent transaction ~s/~s"
+         (warn "lmdb:call-with-transaction: intention to operate on parent transaction ~s/~s"
                *transaction* transaction)
          (funcall op transaction))
         ((and *transaction*
