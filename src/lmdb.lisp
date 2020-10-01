@@ -1108,37 +1108,40 @@ The @cl:param(operation) argument specifies the operation."
  an open transaction may be shared between threads - that is, opened in one
  and involved in operations in another."
   (declare (dynamic-extent op))
-  (cond ((find transaction *transactions*)
-         ;; this indicate a probable program error: a transaction wrapper should not nest in itself.
-         ;; especially with nested write transactions, this is actually not legal:
-         ;; it implies operations on entities governed by the transaction, but
-         ;; as per http://www.lmdb.tech/doc/group__mdb.html#gad7ea55da06b77513609efebd44b26920
-         ;; "A parent transaction and its cursors may not issue any other operations than mdb_txn_commit and mdb_txn_abort while it has active child transactions"
-         (warn "lmdb:call-with-transaction: intention to operate on parent transaction ~s/~s"
-               *transaction* transaction)
-         (funcall op transaction))
-        ((and *transaction*
-              (eq (transaction-environment *transaction*)
-                  (transaction-environment transaction)))
-         ;; do not nest, just use
-         (funcall op transaction))
-        (t
-         (let ((status nil)
-               (*transactions* (cons transaction *transactions*))
-               (*transaction* transaction))
-           (declare (dynamic-extent *transactions*))
-           (enter-transaction transaction initial-disposition)
-           (unwind-protect (handler-bind ((serious-condition (lambda (c) (setf status c))))
-                             (multiple-value-prog1 (funcall op transaction)
-                               (leave-transaction transaction normal-disposition)
-                               (setf status normal-disposition)))
-             (unless (eq status normal-disposition)
-               ;; distinguish an aysnchronous termination for the operation
-               ;; from an an error
-               (when (and *debug* (typep status 'serious-condition))
-                 (warn "lmdb:call-with-transaction leave transaction in unwind: ~s ~s: ~a"
-                       transaction (cffi:mem-ref (%handle transaction) :pointer) status))
-               (leave-transaction transaction error-disposition)))))))
+  (let ((existing nil))
+    (cond ((find transaction *transactions*)
+           ;; this indicate a probable program error: a transaction wrapper should not nest in itself.
+           ;; especially with nested write transactions, this is actually not legal:
+           ;; it implies operations on entities governed by the transaction, but
+           ;; as per http://www.lmdb.tech/doc/group__mdb.html#gad7ea55da06b77513609efebd44b26920
+           ;; "A parent transaction and its cursors may not issue any other operations than mdb_txn_commit and mdb_txn_abort while it has active child transactions"
+           (warn "lmdb:call-with-transaction: intention to operate on parent transaction ~s/~s"
+                 *transaction* transaction)
+           (funcall-transaction-op op transaction))
+          ((and (setf existing (find (transaction-environment transaction) *transactions* :key #'transaction-environment))
+                (logior (transaction-flags transaction) liblmdb:+rdonly+))
+           ;; if it is read-only and a governing one exists, do not nest, just use _the existing one_
+           (funcall-transaction-op op transaction))
+          (t
+           (let ((status nil)
+                 (*transactions* (cons transaction *transactions*))
+                 (*transaction* transaction))
+             (declare (dynamic-extent *transactions*))
+             (enter-transaction transaction initial-disposition)
+             (unwind-protect (handler-bind ((serious-condition (lambda (c) (setf status c)))) ;; no control transfer
+                               (multiple-value-prog1 (funcall-transaction-op op transaction)
+                                 (leave-transaction transaction normal-disposition)
+                                 (setf status normal-disposition)))
+               (unless (eq status normal-disposition)
+                 ;; distinguish an aysnchronous termination for the operation
+                 ;; from an an error
+                 (when (and *debug* (typep status 'serious-condition))
+                   (warn "lmdb:call-with-transaction leave transaction in unwind: ~s ~s: ~a"
+                         transaction (cffi:mem-ref (%handle transaction) :pointer) status))
+                 (leave-transaction transaction error-disposition))))))))
+
+(defun funcall-transaction-op (op transaction)
+  (funcall op transaction))
 
 (defmacro with-transaction ((transaction &rest options
                                          &key normal-disposition
