@@ -1145,8 +1145,8 @@ The @cl:param(operation) argument specifies the operation."
            ;; if it is read-only and a governing one exists, do not nest, just use _the existing one_
            ;; rebinding the global value to the existing one.
            (when *lmdb-verbose*
-             (format *trace-output* "~&reuse governing transaction ~s instead of ~s shadowing ~s~%" 
-                     existing transaction *transaction*))
+             (format *trace-output* "~&reuse governing transaction ~s instead of ~s~@[ shadowing ~s~]~%" 
+                     existing transaction (unless (eq *transaction* existing) *transaction*)))
            (let ((*transaction* existing))
              (funcall-transaction-op op existing)))
           (t
