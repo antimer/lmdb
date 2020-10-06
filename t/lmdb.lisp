@@ -39,7 +39,7 @@
         (let ((db))
           (finishes
             (setf db (lmdb:make-database txn "db"
-                                         :create t)))
+                                         :if-does-not-exist :create)))
           (is-true
            (lmdb::database-create-p db))
           (finishes
