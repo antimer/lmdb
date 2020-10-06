@@ -355,6 +355,16 @@ floats, booleans and strings. Returns a (size . array) pair."
 (defun reentrant-cursor-error (&rest args)
   (apply #'error 'reentrant-cursor-error args))
 
+
+(define-condition map-resized-error (environment-error)
+  ()
+  (:documentation "The environment has been resized.")
+  (:report (lambda (condition stream)
+             (format stream "Environment resized: ~s."
+                     (condition-environment condition)))))
+(defun map-resized-error (&rest args)
+  (apply #'error 'map-resized-error args))
+
 (defun unknown-error (error-code)
   (error "Unknown error code: ~A. Result from strerror(): ~A"
          error-code
@@ -598,6 +608,7 @@ in a segmentation fault.)
       (liblmdb:txn-abort %txn))
     (cffi:foreign-free %handle)))
                                      
+(defparameter +map-resized-limit+ 3)
 
 (defgeneric begin-transaction (transaction &key flags)
   (:documentation "Begin the transaction.
@@ -615,24 +626,32 @@ in a segmentation fault.)
     (with-slots (env parent) transaction
       (let ((%handle (%handle transaction)))
         (when (cffi:null-pointer-p (cffi:mem-ref %handle :pointer))
-          (let ((return-code
-                 (without-interrupts
-                   (liblmdb:txn-begin (handle env)
-                                      (if parent
-                                          (%handle parent)
-                                          (cffi:null-pointer))
-                                      flags
-                                      %handle))))
-            (alexandria:switch (return-code)
-              (0
-               (let ((%txn (cffi:mem-ref %handle :pointer)))
-                 (setf (transaction-id transaction)
-                       (cffi:foreign-slot-value %txn '(:struct liblmdb:txn) 'liblmdb:mt-txnid)))
-               ;; Success
-               t)
-              ;; TODO rest
-              (t
-               (unknown-error return-code)))))))))
+          (loop for retry-count below +map-resized-limit+
+            do (let ((return-code
+                      (without-interrupts
+                        (liblmdb:txn-begin (handle env)
+                                           (if parent
+                                               (%handle parent)
+                                               (cffi:null-pointer))
+                                           flags
+                                           %handle))))
+                 (alexandria:switch (return-code)
+                                    (0
+                                     ;; record the current transaction id and...
+                                     (let ((%txn (cffi:mem-ref %handle :pointer)))
+                                       (setf (transaction-id transaction)
+                                             (cffi:foreign-slot-value %txn '(:struct liblmdb:txn) 'liblmdb:mt-txnid)))
+                                     ;; ... return success
+                                     (return t))
+                                    (liblmdb:+map-resized+
+                                     (when *lmdb-verbose*
+                                       (format *trace-output* "~&map resized attempt ~a: ~a~%" retry-count env))
+                                     ;; resize the map and try again
+                                     (liblmdb:env-set-mapsize (handle env) 0))
+                                    ;; TODO rest
+                                    (t
+                                     (unknown-error return-code))))
+            finally (map-resized-error :environment env)))))))
 
 
 (defun require-open-transaction (transaction &optional (message nil))
@@ -1095,6 +1114,9 @@ The @cl:param(operation) argument specifies the operation."
        (call-ensuring-open-environment #',op ,environment))))
 
 
+(defun funcall-transaction-op (op transaction)
+  (funcall op transaction))
+
 (defun call-with-transaction (op transaction
                                  &key
                                  (normal-disposition :abort)
@@ -1121,7 +1143,12 @@ The @cl:param(operation) argument specifies the operation."
           ((and (setf existing (find (transaction-environment transaction) *transactions* :key #'transaction-environment))
                 (logior (transaction-flags transaction) liblmdb:+rdonly+))
            ;; if it is read-only and a governing one exists, do not nest, just use _the existing one_
-           (funcall-transaction-op op transaction))
+           ;; rebinding the global value to the existing one.
+           (when *lmdb-verbose*
+             (format *trace-output* "~&reuse governing transaction ~s instead of ~s shadowing ~s~%" 
+                     existing transaction *transaction*))
+           (let ((*transaction* existing))
+             (funcall-transaction-op op existing)))
           (t
            (let ((status nil)
                  (*transactions* (cons transaction *transactions*))
@@ -1139,9 +1166,6 @@ The @cl:param(operation) argument specifies the operation."
                    (warn "lmdb:call-with-transaction leave transaction in unwind: ~s ~s: ~a"
                          transaction (cffi:mem-ref (%handle transaction) :pointer) status))
                  (leave-transaction transaction error-disposition))))))))
-
-(defun funcall-transaction-op (op transaction)
-  (funcall op transaction))
 
 (defmacro with-transaction ((transaction &rest options
                                          &key normal-disposition
