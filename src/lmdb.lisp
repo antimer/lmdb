@@ -24,6 +24,7 @@
    :cursor-get
    :database
    :database-maximum-count
+   :database-name
    :database-not-found
    :database-statistics
    :del
