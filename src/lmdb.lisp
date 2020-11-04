@@ -33,6 +33,7 @@
    :drop-database
    :ensure-open-database
    :ensure-open-environment
+   :enter-transaction
    :environment
    :environment-directory
    :environment-info
@@ -40,6 +41,7 @@
    :environment-statistics
    :get
    :get-with
+   :leave-transaction
    :lmdb-error
    :make-cursor
    :make-database
@@ -1142,13 +1144,14 @@ The @cl:param(operation) argument specifies the operation."
                  *transaction* transaction)
            (funcall-transaction-op op transaction))
           ((and (setf existing (find (transaction-environment transaction) *transactions* :key #'transaction-environment))
-                (logior (transaction-flags transaction) liblmdb:+rdonly+))
+                (eql (transaction-flags transaction) (transaction-flags existing)))
            ;; if it is read-only and a governing one exists, do not nest, just use _the existing one_
            ;; rebinding the global value to the existing one.
            (when *lmdb-verbose*
              (format *trace-output* "~&reuse governing transaction ~s instead of ~s~@[ shadowing ~s~]~%" 
                      existing transaction (unless (eq *transaction* existing) *transaction*)))
            (let ((*transaction* existing))
+             ;; just apply the operator, but neither enter _nor_ leave !! assumes disposition is the same
              (funcall-transaction-op op existing)))
           (t
            (let ((status nil)
