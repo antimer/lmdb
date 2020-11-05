@@ -33,7 +33,7 @@
    :drop-database
    :ensure-open-database
    :ensure-open-environment
-   :enter-transaction
+   :enter-tr
    :environment
    :environment-directory
    :environment-info
@@ -58,6 +58,7 @@
    :reset-transaction
    :transaction
    :transaction-environment
+   :transaction-flags
    :transaction-parent
    :transaction-id
    :unknown-error
