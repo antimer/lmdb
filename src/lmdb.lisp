@@ -33,7 +33,7 @@
    :drop-database
    :ensure-open-database
    :ensure-open-environment
-   :enter-tr
+   :enter-transaction
    :environment
    :environment-directory
    :environment-info
