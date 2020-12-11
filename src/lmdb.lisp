@@ -224,7 +224,7 @@ Before an environment can be used, it must be opened with @c(open-environment)."
   ;; permit class initiarg
   (declare (ignore class)))
 
-(defparameter *warn-if-parent-transactions* t)
+(defparameter *warn-if-parent-transactions* nil)
 
 (defgeneric make-transaction (environment &key class parent &allow-other-keys)
   (:method ((environment environment) &rest args
