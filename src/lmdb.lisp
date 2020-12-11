@@ -437,7 +437,7 @@ floats, booleans and strings. Returns a (size . array) pair."
             (0 (cffi:mem-ref %count :uint32))
             (t (unknown-error return-code))))))))
 
-(defparameter *lmdb-verbose* t)
+(defparameter *lmdb-verbose* nil)
 
 (defgeneric open-environment (environment &key if-does-not-exist)
   (:documentation "Open the environment connection.
